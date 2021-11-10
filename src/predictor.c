@@ -11,9 +11,9 @@
 //
 // TODO:Student Information
 //
-const char *studentName = "NAME";
-const char *studentID   = "PID";
-const char *email       = "EMAIL";
+const char *studentName = "Shanchuan You";
+const char *studentID   = "A14903804";
+const char *email       = "shy228@ucsd.edu";
 
 //------------------------------------//
 //      Predictor Configuration       //
@@ -23,20 +23,32 @@ const char *email       = "EMAIL";
 const char *bpName[4] = { "Static", "Gshare",
                           "Tournament", "Custom" };
 
-int ghistoryBits; // Number of bits used for Global History
+int ghistoryBits; // Number of bits used for Global History -> the history of previous m prediction outcome
 int lhistoryBits; // Number of bits used for Local History
-int pcIndexBits;  // Number of bits used for PC index
+int pcIndexBits;  // Number of bits used for PC index -> the branch adddress, assuming it is n bits
 int bpType;       // Branch Prediction Type
 int verbose;
 
 //------------------------------------//
 //      Predictor Data Structures     //
 //------------------------------------//
-
 //
 //TODO: Add your own Branch Predictor data structures here
 //
+struct node
+{
+  int result;
+  struct node* next;
+};
+typedef struct node node;
 
+struct queue
+{
+  int count;
+  node* front;
+  node* rear;
+};
+typedef struct queue queue;
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -47,9 +59,10 @@ int verbose;
 void
 init_predictor()
 {
-  //
   //TODO: Initialize Branch Predictor Data Structures
-  //
+  //a data structure 
+  
+
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -81,7 +94,8 @@ make_prediction(uint32_t pc)
 // Train the predictor the last executed branch at PC 'pc' and with
 // outcome 'outcome' (true indicates that the branch was taken, false
 // indicates that the branch was not taken)
-//
+//each take one branch and make prediction, then compare with the outcome and 
+//see if we need to update the predictor
 void
 train_predictor(uint32_t pc, uint8_t outcome)
 {
