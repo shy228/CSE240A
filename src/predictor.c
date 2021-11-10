@@ -37,7 +37,7 @@ int verbose;
 //
 struct node
 {
-  int result;
+  int counters;
   struct node* next;
 };
 typedef struct node node;
@@ -46,7 +46,7 @@ struct queue
 {
   int count;
   node* front;
-  node* rear;
+  node* tail;
 };
 typedef struct queue queue;
 
@@ -60,9 +60,24 @@ void
 init_predictor()
 {
   //TODO: Initialize Branch Predictor Data Structures
-  //a data structure 
-  
-
+  queue* q = malloc(sizeof(queue));
+  q->count = 0;
+  q->front = NULL;
+  q->tail = NULL;  
+  while(q->count < ghistoryBits){
+    node* n = malloc(sizeof(node));
+    //Initialize as weak not taken at first
+    n->counters = WN;
+    //set up the first 
+    if(q->count == 0){
+      q->front = n;
+      q->tail = n;
+    }else{
+      q->front->next = n;
+      q->front = n;
+    }
+    q->count++;
+  }
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
