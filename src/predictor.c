@@ -35,18 +35,35 @@ int verbose;
 //
 //TODO: Add your own Branch Predictor data structures here
 //
-
-
+uint32_t gshare_history;
+uint32_t *gs_table;
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
 
 // Initialize the predictor
 //
+void init_gshare()
+{
+  //the history is initialized as strong not taken (all 0's) per the instruction.
+  gshare_history = SN; 
+  // the predictor size is: 2^(ghistoryBits);
+  uint32_t size;
+  size = 1<<ghistoryBits;
+  //each entry is either 0,1,2,3 -> only two bits, but the smallest we can have is 1 byte (8 bits).
+  gs_table = malloc(sizeof(uint8_t) * size);
+  for(unsigned int i = 0; i < size; i++){
+    uint8_t mask = 0b0;
+    gs_table[i] = mask | WN;
+  }
+}
 void
 init_predictor()
 {
-  
+  if(bpType == GSHARE){
+    init_gshare();
+  }
+
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
