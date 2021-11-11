@@ -25,7 +25,7 @@ const char *bpName[4] = { "Static", "Gshare",
 
 int ghistoryBits; // Number of bits used for Global History -> the history of previous m prediction outcome
 int lhistoryBits; // Number of bits used for Local History
-int pcIndexBits;  // Number of bits used for PC index -> the branch adddress, assuming it is n bits
+int pcIndexBits;  // Number of bits used for PC index
 int bpType;       // Branch Prediction Type
 int verbose;
 
@@ -38,14 +38,17 @@ int verbose;
 uint32_t gshare_history;
 //the mapping table
 uint32_t *gs_table;
+//local history table -> first level table of local history
+uint32_t *lht;
+//local history predictor table -> second level table of local history
+uint32_t *lhp;
 //used to get the ghisotryBits index (lower)
 uint32_t gshare_mask;
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
 
-// Initialize the predictor
-//
+// Initialize the gshare predictor
 void init_gshare()
 {
   //the history is initialized as strong not taken (all 0's) per the instruction.
@@ -57,8 +60,8 @@ void init_gshare()
   gs_table = malloc(sizeof(uint8_t) * size);
   printf("size is: %d\n", size);
   //each index (entry)
+  uint8_t mask = 0b0;
   for(unsigned int i = 0; i < size; i++){
-    uint8_t mask = 0b0;
     //initilize as weak taken (which is 1) by default
     gs_table[i] = mask | WN;
   }
@@ -70,12 +73,48 @@ void init_gshare()
   }
   
 }
+
+/*
+a 2-level branch predictor that 
+
+1th level: pcindex -> modify branch address as index -> 2^(pcIndexBits) entries and
+each entry has length lhistoryBits;
+
+2nd level: lhistoryBits as index -> 2^(lhistoryBits) entries and each entry has length 2 -> 2 - bits predictor.
+In our case, would be a uint8_t size.
+*/
+void init_local()
+{
+  //local history table size -> lht_size
+  uint32_t lht_size;
+  //local history predictor size 
+  uint32_t lhp_size;
+  //used to cut the 4 bytes integer to 1 byte as our table only has 1 byte size for each entry
+  uint8_t mask = 0b0;
+  lht_size = 1 << pcIndexBits;
+  //size is lht_size and each entry, for simple, use uint32_t since lhistoryBits at most uint32_t.
+  lht = malloc(sizeof(uint32_t)*lht_size);
+  //initialize each local history as 0 -> NONTAKEN
+  for(unsigned int i = 0; i < lht_size; i++){
+    lht[i] = NOTTAKEN;
+  }
+  lhp_size = 1 << lhistoryBits;
+  //size is lhp_size and, for each entry, we only need 8 bits since the counter only has value 0 1 2 3
+  lhp = malloc(sizeof(uint8_t)*lhp_size);
+  for(unsigned int i = 0; i < lhp_size; i++){
+    lhp[i] = mask | WN;
+  }
+}
 void
 init_predictor()
 {
   //printf("it runs here\n");
   if(bpType == GSHARE){
     init_gshare();
+  }
+  else if(bpType == TOURNAMENT){
+    init_gshare();
+    init_local();
   }
   //printf("gshare successfully initialized\n");
 }
@@ -115,19 +154,13 @@ uint8_t result = 0;
   return NOTTAKEN;
 }
 
-// Train the predictor the last executed branch at PC 'pc' and with
-// outcome 'outcome' (true indicates that the branch was taken, false
-// indicates that the branch was not taken)
-//each take one branch and make prediction, then compare with the outcome and 
-//see if we need to update the predictor
-void
-train_predictor(uint32_t pc, uint8_t outcome)
+/*
+train the gshare such that every time we make a prediction of the branch.
+1. Update the prediction history -> gshare_history, for every prediction
+2. Update the pattern history table if necessary
+*/
+void train_gshare(uint32_t pc, uint8_t outcome)
 {
-  //
-  //TODO: Implement Predictor training
-  //
-  //get the result
-  //uint8_t result = make_prediction(pc);
   //get the index
   uint32_t index = (pc & gshare_mask) ^ (gshare_history & gshare_mask);
   //update the gshare_history
@@ -152,5 +185,24 @@ train_predictor(uint32_t pc, uint8_t outcome)
   //this is the last case
   else{
     if(outcome == NOTTAKEN) gs_table[index]--;
+  } 
+}
+
+// Train the predictor the last executed branch at PC 'pc' and with
+// outcome 'outcome' (true indicates that the branch was taken, false
+// indicates that the branch was not taken)
+//each take one branch and make prediction, then compare with the outcome and 
+//see if we need to update the predictor
+void
+train_predictor(uint32_t pc, uint8_t outcome)
+{
+  //
+  //TODO: Implement Predictor training
+  //
+  if(bpType == GSHARE){
+    train_gshare(pc,outcome);
+  }
+  else if(bpType == TOURNAMENT){
+    
   }
 }
