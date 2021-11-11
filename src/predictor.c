@@ -68,6 +68,7 @@ void init_gshare()
   for(int i = 0; i < ghistoryBits; i++){
     gshare_mask = (gshare_mask << 1) | 1;
   }
+  
 }
 void
 init_predictor()
