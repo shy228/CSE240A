@@ -36,12 +36,16 @@ int verbose;
 //TODO: Add your own Branch Predictor data structures here
 //the total history of the gshare
 uint32_t gshare_history;
-//the mapping table
-uint32_t *gs_table;
+//the gshare table
+uint8_t *gs_table;
 //local history table -> first level table of local history
 uint32_t *lht;
 //local history predictor table -> second level table of local history
-uint32_t *lhp;
+uint8_t *lhp;
+//global history predictor
+uint32_t *ghp;
+//the predictor makes choice based on the result form lhp and ghp
+uint32_t *choice_predictor;
 //used to get the ghisotryBits index (lower)
 uint32_t gshare_mask;
 //------------------------------------//
@@ -57,7 +61,7 @@ void init_gshare()
   uint32_t size;
   size = 1<<ghistoryBits;
   //each entry is either 0,1,2,3 -> only two bits, but the smallest we can have is 1 byte (8 bits).
-  gs_table = malloc(sizeof(uint8_t) * size);
+  gs_table = (uint8_t *) malloc(sizeof(uint8_t) * size);
   printf("size is: %d\n", size);
   //each index (entry)
   uint8_t mask = 0b0;
@@ -82,6 +86,7 @@ each entry has length lhistoryBits;
 
 2nd level: lhistoryBits as index -> 2^(lhistoryBits) entries and each entry has length 2 -> 2 - bits predictor.
 In our case, would be a uint8_t size.
+
 */
 void init_local()
 {
@@ -93,18 +98,41 @@ void init_local()
   uint8_t mask = 0b0;
   lht_size = 1 << pcIndexBits;
   //size is lht_size and each entry, for simple, use uint32_t since lhistoryBits at most uint32_t.
-  lht = malloc(sizeof(uint32_t)*lht_size);
+  lht = (uint32_t *) malloc(sizeof(uint32_t)*lht_size);
   //initialize each local history as 0 -> NONTAKEN
   for(unsigned int i = 0; i < lht_size; i++){
     lht[i] = NOTTAKEN;
   }
   lhp_size = 1 << lhistoryBits;
   //size is lhp_size and, for each entry, we only need 8 bits since the counter only has value 0 1 2 3
-  lhp = malloc(sizeof(uint8_t)*lhp_size);
+  lhp = (uint8_t *) malloc(sizeof(uint8_t)*lhp_size);
   for(unsigned int i = 0; i < lhp_size; i++){
     lhp[i] = mask | WN;
   }
 }
+
+/*
+1. the global predictor which has a global_history table where each entry is the
+global history prediction (k bits) -> there are 2^(globalhistoryBits) entries
+
+2. another choice predictor is also initialized which has the same 2^(globalhistoryBits) entries
+but it will choose the result based on the localhistory table and the globle history table
+*/
+void init_global()
+{
+  //size is 2^ghistoryBits 
+  uint32_t size = 1 << ghistoryBits;
+  uint8_t mask = 0b0;
+  ghp = malloc(sizeof(uint8_t)*size);
+  choice_predictor = malloc(sizeof(uint8_t)*size);
+  //set as WN by default
+  for(unsigned int i = 0; i < size; i++){
+    ghp[i] = mask | WN;
+    choice_predictor[i] =  mask |   WN;
+  }
+  
+}
+
 void
 init_predictor()
 {
@@ -113,8 +141,8 @@ init_predictor()
     init_gshare();
   }
   else if(bpType == TOURNAMENT){
-    init_gshare();
     init_local();
+    init_global();
   }
   //printf("gshare successfully initialized\n");
 }
@@ -129,11 +157,11 @@ make_prediction(uint32_t pc)
   //
   //TODO: Implement prediction scheme
   //
-//printf("mask is: %d\n", gshare_mask);
-uint32_t gshare_index = (pc & gshare_mask) ^ (gshare_history & gshare_mask);
-//printf("index is: %d\n", gshare_index);
-uint8_t gshare_prediction;
-uint8_t result = 0;
+  //printf("mask is: %d\n", gshare_mask);
+  uint32_t gshare_index = (pc & gshare_mask) ^ (gshare_history & gshare_mask);
+  //printf("index is: %d\n", gshare_index);
+  uint8_t gshare_prediction;
+  uint8_t result = 0;
   // Make a prediction based on the bpType
   switch (bpType) {
     case STATIC:
@@ -188,6 +216,16 @@ void train_gshare(uint32_t pc, uint8_t outcome)
   } 
 }
 
+/*
+train the tournament predictor which is bascially a selector to select
+between gshare and local.
+*/
+void train_tournament(uint32_t pc, uint8_t outcome)
+{
+
+}
+
+
 // Train the predictor the last executed branch at PC 'pc' and with
 // outcome 'outcome' (true indicates that the branch was taken, false
 // indicates that the branch was not taken)
@@ -203,6 +241,6 @@ train_predictor(uint32_t pc, uint8_t outcome)
     train_gshare(pc,outcome);
   }
   else if(bpType == TOURNAMENT){
-    
+    train_tournament(pc,outcome);
   }
 }
