@@ -143,6 +143,7 @@ void init_global()
   //set as WN by default
   for(unsigned int i = 0; i < size; i++){
     ghp[i] = mask | WN;
+    //initialized to weakly select the global predictor.
     choice_predictor[i] =  mask |   WN;
   }
   //if ghistoryBits is 6 -> then we get 0b111111
