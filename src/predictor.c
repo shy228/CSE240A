@@ -64,7 +64,7 @@ void init_gshare()
   size = 1<<ghistoryBits;
   //each entry is either 0,1,2,3 -> only two bits, but the smallest we can have is 1 byte (8 bits).
   gs_table = (uint8_t *) malloc(sizeof(uint8_t) * size);
-  printf("size is: %d\n", size);
+  //printf("size is: %d\n", size);
   //each index (entry)
   uint8_t mask = 0b0;
   for(unsigned int i = 0; i < size; i++){
@@ -106,6 +106,7 @@ void init_local()
     lht[i] = NOTTAKEN;
   }
   lhp_size = 1 << lhistoryBits;
+  //printf("lhp size is: %d\n", lhp_size);
   //size is lhp_size and, for each entry, we only need 8 bits since the counter only has value 0 1 2 3
   lhp = (uint8_t *) malloc(sizeof(uint8_t)*lhp_size);
   for(unsigned int i = 0; i < lhp_size; i++){
@@ -199,10 +200,11 @@ make_prediction(uint32_t pc)
       if(gshare_prediction >= 2) return result | TAKEN;
       return result;
     case TOURNAMENT:
+      //printf("it runs here\n");
       tournament_index = global_history & global_mask;
       tournament_prediction = choice_predictor[tournament_index];
       //get only lower pcbits and get the local history -> then get the lower localbits 
-      local_index = lht[pc&pc_mask] & local_mask;
+      local_index = (lht[pc&pc_mask]) & local_mask;
       local_prediction = lhp[local_index];
       //tournament_index is the same as global history index
       global_prediction = ghp[tournament_index];
@@ -210,7 +212,9 @@ make_prediction(uint32_t pc)
       if(tournament_prediction >= 2){
         if(local_prediction >= 2) return result | TAKEN;
         return result;
-      }else{
+      }
+      //otherwise, we choose the prediction result from the global predictor.
+      else{
         if(global_prediction >= 2) return result | TAKEN;
         return result;
       }
@@ -263,7 +267,45 @@ between gshare and local.
 */
 void train_tournament(uint32_t pc, uint8_t outcome)
 {
+  uint8_t local_prediction = lhp[lht[pc & pc_mask] & local_mask];
+  uint8_t global_prediction = ghp[global_history & global_mask];
+  if(local_prediction >= 2) local_prediction = TAKEN;
+  else local_prediction = NOTTAKEN;
 
+  if(global_prediction >= 2) global_prediction = TAKEN;
+  else global_prediction = NOTTAKEN;
+  //check the prediction is correct or not.
+  uint8_t p1_correct = local_prediction & outcome;
+  uint8_t p2_correct = global_prediction & outcome;
+  //Increment the counter in the choice_predictor per the instruction
+  if(p1_correct == 1 && p2_correct == 0){
+    if(choice_predictor[global_history & global_mask] <= WT)
+      choice_predictor[global_history & global_mask]++;
+  }
+  //Decrement
+  else if(p1_correct == 0 && p2_correct == 1){
+    if(choice_predictor[global_history & global_mask] >= WN)
+      choice_predictor[global_history & global_mask]--;
+  }
+  //update the global predictor
+  if(outcome == TAKEN){
+    //update the ghp and lhp based on the true outcome
+    if(ghp[global_history & global_mask] <= WT)
+      ghp[global_history & global_mask]++;
+    if(lhp[lht[pc & pc_mask] & local_mask] <= WT)
+      lhp[lht[pc & pc_mask] & local_mask]++;
+  }
+  else{
+    //same above
+    if(ghp[global_history & global_mask] >= WN)
+      ghp[global_history & global_mask]--;
+    if(lhp[lht[pc & pc_mask] & local_mask] >= WN)
+      lhp[lht[pc & pc_mask] & local_mask]--;
+  }
+  //update the global history
+  global_history = (global_history << 1) | outcome;
+  //update the local history
+  lht[pc & pc_mask] = (lht[pc & pc_mask] << 1) | outcome;
 }
 
 
