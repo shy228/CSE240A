@@ -76,7 +76,7 @@ void init_gshare()
   //if ghistoryBits is 6 -> then we get 0b111111
   for(int i = 0; i < ghistoryBits; i++){
     global_mask = (global_mask << 1) | 1;
-  }
+  }  
   
 }
 
