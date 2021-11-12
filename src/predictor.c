@@ -35,7 +35,7 @@ int verbose;
 //
 //TODO: Add your own Branch Predictor data structures here
 //the total history of the gshare
-uint32_t gshare_history;
+uint32_t global_history;
 //the gshare table
 uint8_t *gs_table;
 //local history table -> first level table of local history
@@ -43,11 +43,13 @@ uint32_t *lht;
 //local history predictor table -> second level table of local history
 uint8_t *lhp;
 //global history predictor
-uint32_t *ghp;
+uint8_t *ghp;
 //the predictor makes choice based on the result form lhp and ghp
-uint32_t *choice_predictor;
+uint8_t *choice_predictor;
 //used to get the ghisotryBits index (lower)
-uint32_t gshare_mask;
+uint32_t global_mask;
+uint32_t local_mask;
+uint32_t pc_mask;
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
@@ -56,7 +58,7 @@ uint32_t gshare_mask;
 void init_gshare()
 {
   //the history is initialized as strong not taken (all 0's) per the instruction.
-  gshare_history = SN; 
+  global_history = NOTTAKEN; 
   // the predictor size is: 2^(ghistoryBits);
   uint32_t size;
   size = 1<<ghistoryBits;
@@ -70,10 +72,10 @@ void init_gshare()
     gs_table[i] = mask | WN;
   }
   printf("successfully assign value to gs_table\n");
-  gshare_mask = 0;
+  global_mask = 0;
   //if ghistoryBits is 6 -> then we get 0b111111
   for(int i = 0; i < ghistoryBits; i++){
-    gshare_mask = (gshare_mask << 1) | 1;
+    global_mask = (global_mask << 1) | 1;
   }
   
 }
@@ -109,6 +111,17 @@ void init_local()
   for(unsigned int i = 0; i < lhp_size; i++){
     lhp[i] = mask | WN;
   }
+
+  //set up the local_history_mask for later use
+  local_mask = 0;
+  for(unsigned int i = 0; i < lhistoryBits; i++){
+    local_mask = (local_mask << 1) | 1;
+  }
+  //same for set up pc
+  pc_mask = 0;
+  for(unsigned int i = 0; i < pcIndexBits; i++){
+    pc_mask = (pc_mask << 1) | 1;
+  }
 }
 
 /*
@@ -123,14 +136,19 @@ void init_global()
   //size is 2^ghistoryBits 
   uint32_t size = 1 << ghistoryBits;
   uint8_t mask = 0b0;
-  ghp = malloc(sizeof(uint8_t)*size);
-  choice_predictor = malloc(sizeof(uint8_t)*size);
+  global_history = NOTTAKEN;
+  ghp = (uint8_t *) malloc(sizeof(uint8_t)*size);
+  choice_predictor = (uint8_t *) malloc(sizeof(uint8_t)*size);
   //set as WN by default
   for(unsigned int i = 0; i < size; i++){
     ghp[i] = mask | WN;
     choice_predictor[i] =  mask |   WN;
   }
-  
+  //if ghistoryBits is 6 -> then we get 0b111111
+  for(int i = 0; i < ghistoryBits; i++){
+    global_mask = (global_mask << 1) | 1;
+  }
+
 }
 
 void
@@ -158,21 +176,44 @@ make_prediction(uint32_t pc)
   //TODO: Implement prediction scheme
   //
   //printf("mask is: %d\n", gshare_mask);
-  uint32_t gshare_index = (pc & gshare_mask) ^ (gshare_history & gshare_mask);
+  uint32_t gshare_index;
+  uint32_t tournament_index;
+  uint32_t local_index;
+  //uint32_t global_index;
   //printf("index is: %d\n", gshare_index);
   uint8_t gshare_prediction;
+  uint8_t tournament_prediction;
+  uint8_t local_prediction;
+  uint8_t global_prediction;
   uint8_t result = 0;
+  
   // Make a prediction based on the bpType
   switch (bpType) {
     case STATIC:
       return TAKEN;
     case GSHARE:
+      gshare_index = (pc & global_mask) ^ (global_history & global_mask);
       gshare_prediction = gs_table[gshare_index];
       //printf("get the prediction\n");
       //cast the 4 bytes integers to be 1 byte
-      if(gshare_prediction >= 2) return result | 1;
+      if(gshare_prediction >= 2) return result | TAKEN;
       return result;
     case TOURNAMENT:
+      tournament_index = global_history & global_mask;
+      tournament_prediction = choice_predictor[tournament_index];
+      //get only lower pcbits and get the local history -> then get the lower localbits 
+      local_index = lht[pc&pc_mask] & local_mask;
+      local_prediction = lhp[local_index];
+      //tournament_index is the same as global history index
+      global_prediction = ghp[tournament_index];
+      //use the result of p1, where we set as local predictor
+      if(tournament_prediction >= 2){
+        if(local_prediction >= 2) return result | TAKEN;
+        return result;
+      }else{
+        if(global_prediction >= 2) return result | TAKEN;
+        return result;
+      }
     case CUSTOM:
     default:
       break;
@@ -190,9 +231,9 @@ train the gshare such that every time we make a prediction of the branch.
 void train_gshare(uint32_t pc, uint8_t outcome)
 {
   //get the index
-  uint32_t index = (pc & gshare_mask) ^ (gshare_history & gshare_mask);
+  uint32_t index = (pc & global_mask) ^ (global_history & global_mask);
   //update the gshare_history
-  gshare_history = (gshare_history << 1) | outcome;
+  global_history = (global_history << 1) | outcome;
   //update the gshare_table
   uint8_t element = gs_table[index];
   //there are 8 possible situations
