@@ -153,6 +153,29 @@ void init_global()
 
 }
 
+/*
+this custom is also a tournament but using gshare and local instead.
+The number of historybits will be set as 15 and the number of local bits is also 15.
+PC bits will be set as 13.
+*/
+void init_custom()
+{
+  pcIndexBits = 13;
+  lhistoryBits = 15;
+  ghistoryBits = 15;
+  uint8_t mask = 0b0;
+  //init gshare and local
+  init_gshare();
+  init_local();
+  uint32_t size = 1 << ghistoryBits;
+  //deal with the choice predictor just like what we did in the global initialization
+  choice_predictor = (uint8_t *) malloc(sizeof(uint8_t)*size);
+  //now our predictor is 3 bits predictor -> 0 1 2 3 4 5 6 7 
+  for(unsigned int i = 0; i < size; i++){
+    choice_predictor[i] = mask | 3;
+  }
+}
+
 void
 init_predictor()
 {
@@ -163,6 +186,9 @@ init_predictor()
   else if(bpType == TOURNAMENT){
     init_local();
     init_global();
+  }
+  else if(bpType == CUSTOM){
+    init_custom();
   }
   //printf("gshare successfully initialized\n");
 }
@@ -220,6 +246,23 @@ make_prediction(uint32_t pc)
         return result;
       }
     case CUSTOM:
+      //get the tournament index
+      tournament_index = global_history & global_mask;
+      tournament_prediction = choice_predictor[tournament_index];
+      //get the local prediction
+      local_index = (lht[pc&pc_mask]) & local_mask;
+      local_prediction = lhp[local_index];
+      //same as above
+      gshare_prediction = gs_table[(pc & global_mask) ^ (global_history & global_mask)];
+      if(tournament_prediction >= 4){
+        if(local_prediction >= 2) return result | TAKEN;
+        return result;
+      }
+      else{
+        if(gshare_prediction >= 2) return result | TAKEN;
+        return result;
+      }
+
     default:
       break;
   }
@@ -309,6 +352,59 @@ void train_tournament(uint32_t pc, uint8_t outcome)
   lht[pc & pc_mask] = (lht[pc & pc_mask] << 1) | outcome;
 }
 
+/*
+train the gsahre and local, update the choice predictor when necessary
+
+*/
+void train_custom(uint32_t pc, uint8_t outcome)
+{
+  //first we compare each predction
+  uint8_t local_prediction = lhp[lht[pc & pc_mask] & local_mask];
+  uint8_t gshare_prediction = gs_table[(pc & global_mask) ^ (global_history & global_mask)];
+
+  if(local_prediction >= WT) local_prediction = TAKEN;
+  else local_prediction = NOTTAKEN;
+
+  if(gshare_prediction >= WT) gshare_prediction = TAKEN;
+  else gshare_prediction = NOTTAKEN;
+  //check if each predcition is correct or not
+  uint8_t p1_correct = local_prediction & outcome;
+  uint8_t p2_correct = gshare_prediction & outcome;
+  //decrement of the choice predictor.
+  if(p1_correct == 0 && p2_correct == 1){
+    if(choice_predictor[global_history & global_mask] >= 1)
+      choice_predictor[global_history & global_mask]--;
+  }
+  //increment
+  else if(p1_correct == 1 && p2_correct == 0){
+    if(choice_predictor[global_history & global_mask] <= 7)
+      choice_predictor[global_history & global_mask]++;
+  }
+
+  //update the gshare prediction and the local prediction table
+  uint32_t gshare_index = (pc & global_mask) ^ (global_history & global_mask);
+  if(outcome == NOTTAKEN){
+    if(gs_table[gshare_index] >= WN){
+      gs_table[gshare_index]--;
+    }
+    if(lhp[lht[pc & pc_mask] & local_mask] >= WN){
+      lhp[lht[pc & pc_mask] & local_mask]--;
+    }
+  }
+  else{
+    if(gs_table[gshare_index] <= WT){
+      gs_table[gshare_index]++;
+    }
+    if(lhp[lht[pc & pc_mask] & local_mask] <= WT){
+      lhp[lht[pc & pc_mask] & local_mask]++;
+    }
+  }
+
+  //update the global history
+  global_history = (global_history << 1) | outcome;
+  //update the local history
+  lht[pc & pc_mask] = (lht[pc & pc_mask] << 1) | outcome;
+}
 
 // Train the predictor the last executed branch at PC 'pc' and with
 // outcome 'outcome' (true indicates that the branch was taken, false
@@ -326,5 +422,8 @@ train_predictor(uint32_t pc, uint8_t outcome)
   }
   else if(bpType == TOURNAMENT){
     train_tournament(pc,outcome);
+  }
+  else if(bpType == CUSTOM){
+    train_custom(pc,outcome);
   }
 }
