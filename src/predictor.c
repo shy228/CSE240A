@@ -319,8 +319,8 @@ void train_tournament(uint32_t pc, uint8_t outcome)
   if(global_prediction >= 2) global_prediction = TAKEN;
   else global_prediction = NOTTAKEN;
   //check the prediction is correct or not.
-  uint8_t p1_correct = local_prediction & outcome;
-  uint8_t p2_correct = global_prediction & outcome;
+  uint8_t p1_correct = local_prediction == outcome ? 1 : 0;
+  uint8_t p2_correct = global_prediction == outcome ? 1 : 0;
   //Increment the counter in the choice_predictor per the instruction
   if(p1_correct == 1 && p2_correct == 0){
     if(choice_predictor[global_history & global_mask] <= WT)
