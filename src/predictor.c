@@ -368,8 +368,8 @@ void train_custom(uint32_t pc, uint8_t outcome)
   if(gshare_prediction >= WT) gshare_prediction = TAKEN;
   else gshare_prediction = NOTTAKEN;
   //check if each predcition is correct or not
-  uint8_t p1_correct = local_prediction & outcome;
-  uint8_t p2_correct = gshare_prediction & outcome;
+  uint8_t p1_correct = local_prediction == outcome ? 1 : 0;
+  uint8_t p2_correct = gshare_prediction == outcome ? 1 : 0;
   //decrement of the choice predictor.
   if(p1_correct == 0 && p2_correct == 1){
     if(choice_predictor[global_history & global_mask] >= 1)
