@@ -134,7 +134,9 @@ main(int argc, char *argv[])
   printf("Misprediction Rate: %7.3f\n", mispredict_rate);
 
   // Cleanup
+  printf("start closing stream\n");
   fclose(stream);
+  printf("start freeing buf\n");
   free(buf);
 
   return 0;
